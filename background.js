@@ -124,28 +124,22 @@ function parseModelJson(raw) {
 async function runGrammarCheck(text, prompt, settings) {
   const { ollamaUrl, modelName } = settings;
 
-  const systemPrompt = `You are a precise grammar and spelling correction assistant.
-Your job is to correct text as instructed while preserving the author's voice, style, and intent.
-Preserve all paragraph breaks, line breaks, and formatting exactly as in the original.
-Do NOT change numbers, currency values, or proper nouns unless they are clearly misspelled.
+  const systemPrompt = `You are a grammar and spelling correction assistant.
+Correct the text according to the instruction. Preserve the author's voice, paragraph breaks, and formatting.
 
-Respond ONLY with a JSON object in this exact format, no markdown, no extra text:
-{
-  "corrected": "<the fully corrected text only — no explanations, no 'instead of', no notes, just the corrected text>",
-  "changes": [
-    { "original": "<original phrase>", "fixed": "<corrected phrase>", "reason": "<brief reason>" }
-  ],
-  "summary": "<one sentence summary of changes made>"
-}
-The "corrected" field must contain ONLY the corrected version of the input text and nothing else.
-If no changes are needed, return an empty changes array and copy the original text into "corrected".`;
+You MUST respond with ONLY this JSON structure and nothing else:
+{"corrected":"...","changes":[{"original":"...","fixed":"...","reason":"..."}],"summary":"..."}
+
+Rules:
+- "corrected" contains ONLY the corrected text. Nothing else. No original text. No explanations. No "instead of". No "but". No notes.
+- "changes" lists each individual edit made.
+- "summary" is one sentence describing what was changed overall.
+- If nothing needs changing, copy the text into "corrected" unchanged and use an empty changes array.`;
 
   const userMessage = `Instruction: ${prompt}
 
-Text to process:
-"""
-${text}
-"""`;
+INPUT TEXT (correct this and return as JSON):
+${text}`;
 
   const response = await fetch(`${ollamaUrl}/api/chat`, {
     method: 'POST',
@@ -156,7 +150,8 @@ ${text}
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userMessage }
       ],
-      stream: false
+      stream: false,
+      options: { num_predict: 8192 }
     })
   });
 
