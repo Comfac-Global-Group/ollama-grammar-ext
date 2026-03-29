@@ -79,6 +79,36 @@ async function fetchBaseModel(ollamaUrl, modelName) {
   }
 }
 
+function parseModelJson(raw) {
+  // Stage 1: strip markdown fences and try directly
+  const cleaned = raw.replace(/```json|```/g, '').trim();
+  try { return JSON.parse(cleaned); } catch {}
+
+  // Stage 2: extract the first {...} block and try again
+  const block = cleaned.match(/\{[\s\S]*\}/);
+  if (block) {
+    try { return JSON.parse(block[0]); } catch {}
+  }
+
+  // Stage 3: fix invalid escape sequences (\' \, \. etc.) and retry
+  const target = block ? block[0] : cleaned;
+  const sanitized = target.replace(/\\([^"\\\/bfnrtu0-9\n])/g, '$1');
+  try { return JSON.parse(sanitized); } catch {}
+
+  // Stage 4: replace literal newlines inside strings with \n and retry
+  const relined = sanitized.replace(/("(?:[^"\\]|\\.)*")/g, m =>
+    m.replace(/\n/g, '\\n').replace(/\r/g, '\\r')
+  );
+  try { return JSON.parse(relined); } catch {}
+
+  // Stage 5: give up — return raw output as the corrected text with a warning
+  return {
+    corrected: raw,
+    changes: [],
+    summary: 'Model returned unstructured output — showing raw response.'
+  };
+}
+
 async function runGrammarCheck(text, prompt, settings) {
   const { ollamaUrl, modelName } = settings;
 
@@ -121,9 +151,8 @@ ${text}
   const data = await response.json();
   const content = data.message?.content || data.response || '';
 
-  // Parse JSON response
-  const cleaned = content.replace(/```json|```/g, '').trim();
-  const parsed = JSON.parse(cleaned);
+  // Parse JSON response with multi-stage fallback
+  const parsed = parseModelJson(content);
 
   // Gather run statistics from the Ollama response
   const evalCount = data.eval_count || 0;
