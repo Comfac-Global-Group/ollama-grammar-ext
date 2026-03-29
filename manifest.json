@@ -1,0 +1,31 @@
+{
+  "manifest_version": 3,
+  "name": "Ollama Grammar Check",
+  "version": "1.0.0",
+  "description": "Right-click selected text to check grammar and spelling using your local Ollama instance.",
+  "permissions": [
+    "contextMenus",
+    "sidePanel",
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "http://localhost:11434/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "side_panel": {
+    "default_path": "sidepanel/sidepanel.html"
+  },
+  "action": {
+    "default_title": "Ollama Grammar Check"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
