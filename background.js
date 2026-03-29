@@ -95,10 +95,22 @@ function parseModelJson(raw) {
   const sanitized = target.replace(/\\([^"\\\/bfnrtu0-9\n])/g, '$1');
   try { return JSON.parse(sanitized); } catch {}
 
-  // Stage 4: replace literal newlines inside strings with \n and retry
-  const relined = sanitized.replace(/("(?:[^"\\]|\\.)*")/g, m =>
-    m.replace(/\n/g, '\\n').replace(/\r/g, '\\r')
-  );
+  // Stage 4: character-by-character scan — replace literal newlines/tabs
+  // inside JSON string values with their escape equivalents.
+  // More reliable than regex for long multi-paragraph strings.
+  let relined = '';
+  let inStr = false;
+  let esc = false;
+  for (let i = 0; i < sanitized.length; i++) {
+    const ch = sanitized[i];
+    if (esc) { relined += ch; esc = false; }
+    else if (ch === '\\' && inStr) { relined += ch; esc = true; }
+    else if (ch === '"') { inStr = !inStr; relined += ch; }
+    else if (inStr && ch === '\n') { relined += '\\n'; }
+    else if (inStr && ch === '\r') { relined += '\\r'; }
+    else if (inStr && ch === '\t') { relined += '\\t'; }
+    else { relined += ch; }
+  }
   try { return JSON.parse(relined); } catch {}
 
   // Stage 5: give up — return raw output as the corrected text with a warning
@@ -114,15 +126,19 @@ async function runGrammarCheck(text, prompt, settings) {
 
   const systemPrompt = `You are a precise grammar and spelling correction assistant.
 Your job is to correct text as instructed while preserving the author's voice, style, and intent.
+Preserve all paragraph breaks, line breaks, and formatting exactly as in the original.
+Do NOT change numbers, currency values, or proper nouns unless they are clearly misspelled.
+
 Respond ONLY with a JSON object in this exact format, no markdown, no extra text:
 {
-  "corrected": "<the fully corrected text>",
+  "corrected": "<the fully corrected text only — no explanations, no 'instead of', no notes, just the corrected text>",
   "changes": [
     { "original": "<original phrase>", "fixed": "<corrected phrase>", "reason": "<brief reason>" }
   ],
   "summary": "<one sentence summary of changes made>"
 }
-If no changes are needed, return an empty changes array and say so in the summary.`;
+The "corrected" field must contain ONLY the corrected version of the input text and nothing else.
+If no changes are needed, return an empty changes array and copy the original text into "corrected".`;
 
   const userMessage = `Instruction: ${prompt}
 
